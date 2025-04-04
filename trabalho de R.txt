@@ -1,0 +1,63 @@
+# 1. Carregar a base de dados Satellite
+library(mlbench)
+data(Satellite)
+dataset <- Satellite
+
+# 2. Criar partições de treino e teste
+set.seed(7) # Para reprodutibilidade
+indices <- sample(1:nrow(dataset), 0.8 * nrow(dataset))
+train_data <- dataset[indices, ]
+test_data <- dataset[-indices, ]
+
+# 3. Treinar modelos RandomForest, SVM e RNA
+library(randomForest)
+library(e1071)
+library(nnet)
+
+# RandomForest
+rf_model <- randomForest(classes ~ ., data = train_data)
+
+# SVM
+svm_model <- svm(classes ~ ., data = train_data)
+
+# RNA (usando multinom)
+rna_model <- multinom(classes ~ ., data = train_data)
+
+# 4. Avaliar modelos e escolher o melhor
+# Matrizes de confusão
+rf_pred <- predict(rf_model, test_data)
+svm_pred <- predict(svm_model, test_data)
+rna_probs <- predict(rna_model, test_data, type = "probs") # Obter probabilidades
+rna_pred <- colnames(rna_probs)[max.col(rna_probs)]
+
+# Converter classes para fatores (necessário para matriz de confusão)
+test_data$classes <- factor(test_data$classes, levels = levels(rf_pred))
+rna_pred <- factor(rna_pred, levels = levels(rf_pred))
+
+rf_conf_matrix <- table(Actual = test_data$classes, Predicted = rf_pred)
+svm_conf_matrix <- table(Actual = test_data$classes, Predicted = svm_pred)
+rna_conf_matrix <- table(Actual = test_data$classes, Predicted = rna_pred)
+
+print("Matriz de Confusão RandomForest:")
+print(rf_conf_matrix)
+print("Matriz de Confusão SVM:")
+print(svm_conf_matrix)
+print("Matriz de Confusão RNA:")
+print(rna_conf_matrix)
+
+# Calcular acurácia
+rf_accuracy <- sum(diag(rf_conf_matrix)) / sum(rf_conf_matrix)
+svm_accuracy <- sum(diag(svm_conf_matrix)) / sum(svm_conf_matrix)
+rna_accuracy <- sum(diag(rna_conf_matrix)) / sum(rna_conf_matrix)
+
+print(paste("Acurácia RandomForest:", rf_accuracy))
+print(paste("Acurácia SVM:", svm_accuracy))
+print(paste("Acurácia RNA:", rna_accuracy))
+
+# 5. Indicar o melhor modelo e a métrica utilizada
+best_model <- ifelse(rf_accuracy > svm_accuracy && rf_accuracy > rna_accuracy, "RandomForest", 
+                     ifelse(svm_accuracy > rna_accuracy, "SVM", "RNA"))
+best_accuracy <- max(rf_accuracy, svm_accuracy, rna_accuracy)
+
+print(paste("O melhor modelo é:", best_model))
+print(paste("A métrica utilizada é a acurácia:", best_accuracy))

@@ -1,0 +1,176 @@
+# Carregar os pacotes necessários
+library(caret)
+library(randomForest)
+library(e1071)  # Para SVM
+library(neuralnet) # Vou manter, mas 'caret' tem outras opções melhores
+
+# 1. Carregar os Dados do URL
+
+url <- "http://www.razer.net.br/datasets/Volumes.csv"
+dados <- read.csv(url, sep = ";")
+
+# 2. Pré-processamento dos Dados
+
+# Converter colunas para numérico (tratando vírgulas como decimais)
+dados$DAP <- as.numeric(gsub(",", ".", dados$DAP))
+dados$HT <- as.numeric(gsub(",", ".", dados$HT))
+dados$HP <- as.numeric(gsub(",", ".", dados$HP))
+dados$VOL <- as.numeric(gsub(",", ".", dados$VOL))
+
+# Remover a coluna "NR"
+dados$NR <- NULL
+
+# 3. Particionamento dos Dados
+
+set.seed(7)  # Definir a semente para reprodutibilidade
+treino_indices <- createDataPartition(dados$VOL, p = 0.8, list = FALSE)
+treino <- dados[treino_indices, ]
+teste <- dados[-treino_indices, ]
+
+# 4. Configuração do Treinamento do 'caret'
+
+controle <- trainControl(method = "cv", number = 10)  # 10-fold cross-validation
+
+# 5. Treinamento dos Modelos
+
+# 5.1. Random Forest
+modelo_rf <- train(VOL ~ DAP + HT + HP,
+                   data = treino,
+                   method = "rf",
+                   trControl = controle)
+
+# 5.2. SVM (Support Vector Machine)
+modelo_svm <- train(VOL ~ DAP + HT + HP,
+                    data = treino,
+                    method = "svmRadial",
+                    trControl = controle)
+
+# 5.3. Redes Neurais (Revisado!)
+#     'neuralnet' é bom para exemplos simples, mas 'caret' oferece 'nnet' ou 'mlpWeight' (do 'RSNNS') que são mais robustos.
+#     Vamos usar 'nnet' aqui, que é mais integrado com 'caret'.
+#     IMPORTANTE: Redes neurais se beneficiam MUITO de escala de dados.
+
+# Escalar os dados (muito importante para redes neurais)
+# Precisamos fazer isso SEPARADAMENTE para treino e teste para evitar "data leakage"!
+treino_escalado <- treino
+teste_escalado <- teste
+
+colunas_para_escalar <- c("DAP", "HT", "HP")
+
+# Escalar treino
+for (col in colunas_para_escalar) {
+  media <- mean(treino[[col]])
+  desvio_padrao <- sd(treino[[col]])
+  treino_escalado[[col]] <- (treino_escalado[[col]] - media) / desvio_padrao
+  teste_escalado[[col]] <- (teste_escalado[[col]] - media) / desvio_padrao  # Usar a MÉDIA e DESVIO do TREINO no TESTE!
+}
+
+
+modelo_rede_neural <- train(VOL ~ DAP + HT + HP,
+                           data = treino_escalado,  # Usar os dados escalados!
+                           method = "nnet",
+                           trControl = controle,
+                           # Parâmetros importantes para redes neurais
+                           tuneGrid = expand.grid(.size = c(5, 10), .decay = c(0.01, 0.001)), # Testar diferentes tamanhos e decay
+                           # size: Número de neurônios na camada oculta
+                           # decay:  Regularização (weight decay) para evitar overfitting
+                           maxit = 2000,   # Aumentar o número máximo de iterações
+                           linout = TRUE,  # Saída linear para regressão
+                           trace = FALSE   # Suprimir o output de treinamento
+                           )
+
+
+# 5.4. Modelo Alométrico de SPURR
+#     (Definido como uma função para avaliação manual)
+prever_spurr <- function(DAP, HT) {
+  0.00007854 * (DAP^2) * HT
+}
+
+previsoes_spurr_teste <- prever_spurr(teste$DAP, teste$HT)
+
+# 6. Previsões no Conjunto de Teste
+
+previsoes_rf_teste <- predict(modelo_rf, teste)
+previsoes_svm_teste <- predict(modelo_svm, teste)
+previsoes_rede_neural_teste <- predict(modelo_rede_neural, teste_escalado) # Usar teste_escalado!
+
+# 7. Definição das Funções de Avaliação (UDFs)
+
+# 7.1. Erro Quadrático Médio (MSE)
+mse_udf <- function(observado, previsto) {
+  mean((observado - previsto)^2)
+}
+
+# 7.2. Raiz do Erro Quadrático Médio (RMSE)
+rmse_udf <- function(observado, previsto) {
+  sqrt(mse_udf(observado, previsto))
+}
+
+# 7.3. Erro Absoluto Médio (MAE)
+mae_udf <- function(observado, previsto) {
+  mean(abs(observado - previsto))
+}
+
+# 7.4. Coeficiente de Determinação (R-Quadrado)
+r_quadrado_udf <- function(observado, previsto) {
+  1 - sum((observado - previsto)^2) / sum((observado - mean(observado))^2)
+}
+
+# 8. Avaliação dos Modelos
+
+# Precisamos "desescalar" as previsões da rede neural para comparar com os valores reais!
+# (Mas neste caso, como só estamos usando R², MSE, etc., não é estritamente necessário, pois as métricas são invariantes a transformações lineares)
+previsoes_rede_neural_teste_desescalado <- previsoes_rede_neural_teste
+
+# Resultados da avaliação
+resultados <- data.frame(
+  Modelo = c("Random Forest", "SVM", "Rede Neural", "SPURR"),
+  MSE = c(
+    mse_udf(teste$VOL, previsoes_rf_teste),
+    mse_udf(teste$VOL, previsoes_svm_teste),
+    mse_udf(teste$VOL, previsoes_rede_neural_teste_desescalado),
+    mse_udf(teste$VOL, previsoes_spurr_teste)
+  ),
+  RMSE = c(
+    rmse_udf(teste$VOL, previsoes_rf_teste),
+    rmse_udf(teste$VOL, previsoes_svm_teste),
+    rmse_udf(teste$VOL, previsoes_rede_neural_teste_desescalado),
+    rmse_udf(teste$VOL, previsoes_spurr_teste)
+  ),
+  MAE = c(
+    mae_udf(teste$VOL, previsoes_rf_teste),
+    mae_udf(teste$VOL, previsoes_svm_teste),
+    mae_udf(teste$VOL, previsoes_rede_neural_teste_desescalado),
+    mae_udf(teste$VOL, previsoes_spurr_teste)
+  ),
+  R_Quadrado = c(
+    r_quadrado_udf(teste$VOL, previsoes_rf_teste),
+    r_quadrado_udf(teste$VOL, previsoes_svm_teste),
+    r_quadrado_udf(teste$VOL, previsoes_rede_neural_teste_desescalado),
+    r_quadrado_udf(teste$VOL, previsoes_spurr_teste)
+  )
+)
+
+
+print(resultados)
+
+# 9. Seleção do Melhor Modelo
+
+encontrar_melhor_modelo <- function(resultados) {
+  # Lógica para escolher o melhor modelo (priorizando RMSE em caso de empate)
+  melhor_mse_modelo <- resultados$Modelo[which.min(resultados$MSE)]
+  melhor_rmse_modelo <- resultados$Modelo[which.min(resultados$RMSE)]
+  melhor_mae_modelo <- resultados$Modelo[which.min(resultados$MAE)]
+  melhor_r2_modelo <- resultados$Modelo[which.max(resultados$R_Quadrado)]
+
+  if (length(unique(c(melhor_mse_modelo, melhor_rmse_modelo, melhor_mae_modelo, melhor_r2_modelo))) > 1) {
+    cat("\nAnálise combinada: Modelos diferentes se destacam em diferentes métricas. Priorizando RMSE.\n")
+    return(melhor_rmse_modelo)
+  } else {
+    cat("\nAnálise combinada: O mesmo modelo se destaca em todas as métricas.\n")
+    return(melhor_rmse_modelo)
+  }
+}
+
+melhor_modelo <- encontrar_melhor_modelo(resultados)
+cat("\nMelhor modelo geral (priorizando RMSE): ", melhor_modelo, "\n")

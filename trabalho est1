@@ -1,0 +1,219 @@
+# Instalar e carregar pacotes necessários (se não tiver)
+# install.packages("DescTools") # Descomente se precisar instalar
+library(DescTools) # Para calcular a moda e teste Wilcoxon com IC
+
+# --- 0. Carregamento dos Dados ---
+# Certifique-se de que o arquivo "salarios.csv" está no diretório de trabalho do R
+# ou forneça o caminho completo para o arquivo.
+tryCatch({
+  dados <- read.csv("salarios.csv")
+  print("Dados carregados com sucesso.")
+}, error = function(e) {
+  stop("Erro ao carregar o arquivo 'salarios.csv'. Verifique o caminho e o arquivo. Erro: ", e$message)
+})
+
+# --- 1. Gráficos e Tabelas ---
+
+# a) Boxplots e Histogramas
+cat("\n--- 1a. Gráficos ---\n")
+# Configurar para mostrar 2x2 gráficos
+par(mfrow=c(2,2), mar=c(4, 4, 2, 1)) # Ajusta margens se necessário
+
+# Boxplots
+boxplot(dados$age, main="Boxplot - Idade da Esposa (age)", ylab="Idade", col="lightblue")
+boxplot(dados$husage, main="Boxplot - Idade do Marido (husage)", ylab="Idade", col="lightcoral")
+
+# Histogramas
+hist(dados$age, main="Histograma - Idade da Esposa (age)", xlab="Idade", ylab="Frequência", col="lightblue", breaks=15) # Ajuste 'breaks' se necessário
+hist(dados$husage, main="Histograma - Idade do Marido (husage)", xlab="Idade", ylab="Frequência", col="lightcoral", breaks=15) # Ajuste 'breaks' se necessário
+
+# Resetar layout gráfico
+par(mfrow=c(1,1))
+cat("Gráficos gerados (ver janela de Plots).\n")
+cat("Comparação Gráfica Preliminar:\n")
+cat("- Os boxplots sugerem que as medianas das idades são diferentes (marido geralmente mais velho).\n")
+cat("- A dispersão das idades (tamanho das caixas e bigodes) parece similar, talvez um pouco maior para os maridos.\n")
+cat("- Os histogramas mostram as distribuições das idades. Ambos parecem ter um pico e talvez uma leve assimetria.\n")
+
+# b) Tabelas de Frequência
+cat("\n--- 1b. Tabelas de Frequência ---\n")
+cat("Tabela de Frequência - Idade da Esposa (age):\n")
+freq_age <- table(dados$age)
+print(freq_age)
+cat("\n")
+
+cat("Tabela de Frequência - Idade do Marido (husage):\n")
+freq_husage <- table(dados$husage)
+print(freq_husage)
+cat("\n")
+cat("Comparação das Tabelas de Frequência:\n")
+cat("- As tabelas mostram a contagem exata para cada idade presente nos dados.\n")
+cat("- Pode-se observar as idades mais comuns e a amplitude das idades para ambos.\n")
+cat("- Comparar diretamente pode ser difícil devido ao número de idades distintas, mas confirma a faixa etária observada nos gráficos.\n")
+
+
+# --- 2. Medidas de Posição e Dispersão ---
+cat("\n--- 2a. Medidas de Posição ---\n")
+
+# Função para calcular a moda (pode retornar múltiplas modas)
+calcular_moda <- function(x) {
+  ux <- unique(x[!is.na(x)]) # Ignora NA para moda
+  if (length(ux) == 0) return(NA) # Retorna NA se só houver NA
+  tab <- tabulate(match(x, ux))
+  modas <- ux[tab == max(tab)]
+  return(modas)
+}
+
+# Cálculos para 'age'
+media_age <- mean(dados$age, na.rm = TRUE)
+mediana_age <- median(dados$age, na.rm = TRUE)
+moda_age <- calcular_moda(dados$age)
+
+cat("Medidas para Idade da Esposa (age):\n")
+cat(sprintf("  Média:    %.2f\n", media_age))
+cat(sprintf("  Mediana:  %.2f\n", mediana_age))
+cat(sprintf("  Moda(s):  %s\n", paste(moda_age, collapse=", ")))
+cat("\n")
+
+# Cálculos para 'husage'
+media_husage <- mean(dados$husage, na.rm = TRUE)
+mediana_husage <- median(dados$husage, na.rm = TRUE)
+moda_husage <- calcular_moda(dados$husage)
+
+cat("Medidas para Idade do Marido (husage):\n")
+cat(sprintf("  Média:    %.2f\n", media_husage))
+cat(sprintf("  Mediana:  %.2f\n", mediana_husage))
+cat(sprintf("  Moda(s):  %s\n", paste(moda_husage, collapse=", ")))
+cat("\n")
+
+cat("Comparação das Medidas de Posição:\n")
+cat(sprintf("- A média de idade dos maridos (%.2f) é maior que a das esposas (%.2f).\n", media_husage, media_age))
+cat(sprintf("- A mediana de idade dos maridos (%.0f) também é maior que a das esposas (%.0f).\n", mediana_husage, mediana_age))
+cat(sprintf("- A(s) moda(s) para esposas é/são %s e para maridos é/são %s.\n", paste(moda_age, collapse=", "), paste(moda_husage, collapse=", ")))
+cat("- Todas as medidas de posição indicam que, em média/tipicamente, os maridos são mais velhos neste conjunto de dados.\n")
+
+
+cat("\n--- 2b. Medidas de Dispersão ---\n")
+
+# Cálculos para 'age'
+var_age <- var(dados$age, na.rm = TRUE)
+dp_age <- sd(dados$age, na.rm = TRUE)
+cv_age <- (dp_age / media_age) * 100
+
+cat("Medidas para Idade da Esposa (age):\n")
+cat(sprintf("  Variância:        %.2f\n", var_age))
+cat(sprintf("  Desvio Padrão:   %.2f\n", dp_age))
+cat(sprintf("  Coef. Variação: %.2f%%\n", cv_age))
+cat("\n")
+
+# Cálculos para 'husage'
+var_husage <- var(dados$husage, na.rm = TRUE)
+dp_husage <- sd(dados$husage, na.rm = TRUE)
+cv_husage <- (dp_husage / media_husage) * 100
+
+cat("Medidas para Idade do Marido (husage):\n")
+cat(sprintf("  Variância:        %.2f\n", var_husage))
+cat(sprintf("  Desvio Padrão:   %.2f\n", dp_husage))
+cat(sprintf("  Coef. Variação: %.2f%%\n", cv_husage))
+cat("\n")
+
+cat("Comparação das Medidas de Dispersão:\n")
+cat(sprintf("- A variância (%.2f vs %.2f) e o desvio padrão (%.2f vs %.2f) são ligeiramente maiores para a idade dos maridos, sugerindo um pouco mais de dispersão.\n", var_husage, var_age, dp_husage, dp_age))
+cat(sprintf("- O Coeficiente de Variação é similar (%.2f%% para maridos vs %.2f%% para esposas), indicando que a dispersão relativa à média é parecida para ambos os grupos.\n", cv_husage, cv_age))
+
+
+# --- 3. Testes Paramétricos ou Não Paramétricos ---
+cat("\n--- 3a. Teste de Comparação de Médias/Medianas (Pareado) ---\n")
+
+# Passo 1: Verificar se os dados são pareados.
+# Assumimos que cada linha representa um casal, logo 'age' e 'husage' são pareados.
+
+# Passo 2: Calcular as diferenças e verificar normalidade.
+diferenca_idades <- dados$husage - dados$age
+alpha <- 0.05 # Nível de significância comum
+use_nonparametric <- FALSE # Flag para decidir qual teste usar
+
+cat("Verificando normalidade das diferenças (husage - age):\n")
+
+if (length(diferenca_idades) <= 5000 && length(diferenca_idades) >= 3) {
+  # N está na faixa do Shapiro-Wilk Test
+  shapiro_test_result <- shapiro.test(diferenca_idades)
+  cat("Resultado do Teste de Shapiro-Wilk para as diferenças (N <= 5000):\n")
+  print(shapiro_test_result)
+
+  if (shapiro_test_result$p.value <= alpha) {
+    cat(sprintf("\nJustificativa: O p-valor do teste de Shapiro-Wilk (%.4e) é MENOR ou IGUAL a %.2f.\n", shapiro_test_result$p.value, alpha))
+    cat("Rejeitamos a hipótese nula de normalidade das diferenças.\n")
+    use_nonparametric <- TRUE
+  } else {
+    cat(sprintf("\nJustificativa: O p-valor do teste de Shapiro-Wilk (%.4f) é MAIOR que %.2f.\n", shapiro_test_result$p.value, alpha))
+    cat("Não rejeitamos a hipótese nula de normalidade das diferenças.\n")
+    # Paramétrico (t-test) será usado (use_nonparametric continua FALSE)
+  }
+} else {
+  # N está fora da faixa do Shapiro-Wilk Test (tipicamente > 5000)
+   cat(sprintf("Aviso: Tamanho da amostra (%d) está fora da faixa suportada pelo teste de Shapiro-Wilk (3 a 5000).\n", length(diferenca_idades)))
+   cat("Avaliando normalidade visualmente com histograma e Q-Q plot.\n")
+   # Plotar histograma e Q-Q plot das diferenças
+   par(mfrow=c(1,2))
+   hist(diferenca_idades, main="Histograma das Diferenças", xlab="husage - age", col="grey")
+   qqnorm(diferenca_idades, main="Q-Q Plot das Diferenças")
+   qqline(diferenca_idades, col="red")
+   par(mfrow=c(1,1))
+   cat("Gráficos gerados.\n")
+   cat("\nJustificativa: Com amostras grandes, testes formais de normalidade são muito sensíveis a pequenos desvios.\n")
+   cat("É mais robusto usar o teste não paramétrico.\n")
+   use_nonparametric <- TRUE
+}
+
+# Passo 3: Executar o teste apropriado.
+if (use_nonparametric) {
+  # Usar Teste de Wilcoxon Signed-Rank (Não Paramétrico)
+  cat("\n--- Executando Teste de Wilcoxon Signed-Rank (não paramétrico) ---\n")
+  # suppressWarnings para evitar avisos sobre ties (empates), que são comuns
+  # Adicionar conf.int=TRUE para obter o intervalo de confiança
+  teste_resultado <- suppressWarnings(wilcox.test(dados$husage, dados$age, paired = TRUE, conf.int = TRUE, exact = FALSE, correct = TRUE))
+  cat("Resultado do Teste de Wilcoxon Signed-Rank Pareado:\n")
+  print(teste_resultado)
+  cat("\nInterpretação (Wilcoxon):\n")
+  cat(sprintf("- O teste compara se a mediana das diferenças (husage - age) é igual a zero.\n"))
+  cat(sprintf("- O p-valor obtido foi %.4e.\n", teste_resultado$p.value))
+  if (teste_resultado$p.value < alpha) {
+    cat(sprintf("- Como o p-valor (%.4e) é MENOR que o nível de significância (%.2f), rejeitamos a hipótese nula (H0).\n", teste_resultado$p.value, alpha))
+    cat("- Concluímos que há uma diferença estatisticamente significativa entre a distribuição das idades das esposas e dos maridos (mediana das diferenças diferente de zero).\n")
+  } else {
+    cat(sprintf("- Como o p-valor (%.4e) é MAIOR ou IGUAL ao nível de significância (%.2f), não rejeitamos a hipótese nula (H0).\n", teste_resultado$p.value, alpha))
+    cat("- Não há evidência estatística suficiente para afirmar que as distribuições das idades diferem significativamente em termos de mediana.\n")
+  }
+  cat(sprintf("- O intervalo de confiança de 95%% para a mediana das diferenças (husage - age) é [%.2f, %.2f].\n", teste_resultado$conf.int[1], teste_resultado$conf.int[2]))
+   if (0 < teste_resultado$conf.int[1] | 0 > teste_resultado$conf.int[2]) {
+     cat("- Como o intervalo de confiança NÃO contém zero, isso reforça a conclusão de que a mediana da diferença é estatisticamente diferente de zero.\n")
+   } else {
+     cat("- Como o intervalo de confiança contém zero, isso reforça a conclusão de que não podemos afirmar que a mediana da diferença é estatisticamente diferente de zero.\n")
+   }
+
+} else {
+  # Usar Teste t Pareado (Paramétrico)
+  cat("\n--- Executando Teste t Pareado (paramétrico) ---\n")
+  teste_resultado <- t.test(dados$husage, dados$age, paired = TRUE)
+  cat("Resultado do Teste t Pareado:\n")
+  print(teste_resultado)
+  cat("\nInterpretação (Teste t):\n")
+  cat(sprintf("- O teste compara se a média das diferenças (husage - age) é igual a zero.\n"))
+  cat(sprintf("- O p-valor obtido foi %.4e.\n", teste_resultado$p.value))
+   if (teste_resultado$p.value < alpha) {
+    cat(sprintf("- Como o p-valor (%.4e) é MENOR que o nível de significância (%.2f), rejeitamos a hipótese nula (H0) de que as médias das idades são iguais.\n", teste_resultado$p.value, alpha))
+    cat("- Concluímos que há uma diferença estatisticamente significativa entre a idade média das esposas e dos maridos.\n")
+  } else {
+    cat(sprintf("- Como o p-valor (%.4e) é MAIOR ou IGUAL ao nível de significância (%.2f), não rejeitamos a hipótese nula (H0) de que as médias das idades são iguais.\n", teste_resultado$p.value, alpha))
+    cat("- Não há evidência estatística suficiente para afirmar que as idades médias diferem.\n")
+  }
+  cat(sprintf("- O intervalo de confiança de 95%% para a diferença média das idades (husage - age) é [%.2f, %.2f].\n", teste_resultado$conf.int[1], teste_resultado$conf.int[2]))
+   if (0 < teste_resultado$conf.int[1] | 0 > teste_resultado$conf.int[2]) {
+     cat("- Como o intervalo de confiança NÃO contém zero, isso reforça a conclusão de que a diferença média é estatisticamente significativa.\n")
+   } else {
+     cat("- Como o intervalo de confiança contém zero, isso reforça a conclusão de que não podemos afirmar que a diferença média é estatisticamente significativa.\n")
+   }
+}
+
+cat("\n--- Fim da Análise ---\n")
